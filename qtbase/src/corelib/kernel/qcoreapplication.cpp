@@ -1451,7 +1451,7 @@ void QCoreApplicationPrivate::sendPostedEvents(QObject *receiver, int event_type
         // first, we diddle the event so that we can deliver
         // it, and that no one will try to touch it later.
         pe.event->posted = false;
-        QScopedPointer<QEvent> e(pe.event);
+        QScopedPointer<QEvent> event_holder(pe.event);
         QObject * r = pe.receiver;
 
         --r->d_func()->postedEvents;
@@ -1468,6 +1468,7 @@ void QCoreApplicationPrivate::sendPostedEvents(QObject *receiver, int event_type
             ~MutexUnlocker() { m.relock(); }
         };
         MutexUnlocker unlocker(locker);
+        QScopedPointer<QEvent> e(event_holder.take());
 
         // after all that work, it's time to deliver the event.
         QCoreApplication::sendEvent(r, e.data());
