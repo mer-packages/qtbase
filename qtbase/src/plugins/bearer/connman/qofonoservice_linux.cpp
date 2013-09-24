@@ -684,11 +684,12 @@ QList<QDBusObjectPath> QOfonoDataConnectionManagerInterface::getPrimaryContexts(
 {
     QList <QDBusObjectPath> contextList;
     QList<QVariant> argumentList;
-    QDBusReply<PathPropertiesList > reply = this->asyncCallWithArgumentList(QLatin1String("GetContexts"),
-                                                                         argumentList);
-    if (reply.isValid()) {
+
+    QDBusPendingReply<PathPropertiesList > reply = this->asyncCallWithArgumentList(QStringLiteral("GetContexts"), argumentList);
+    reply.waitForFinished();
+    if (!reply.isError()) {
         foreach (ObjectPathProperties context, reply.value()) {
-            contextList << context.path;
+            contextList.append(context.path);
         }
     }
     return contextList;
