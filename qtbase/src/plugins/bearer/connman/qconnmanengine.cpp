@@ -289,7 +289,8 @@ QNetworkConfigurationManager::Capabilities QConnmanEngine::capabilities() const
 {
     return QNetworkConfigurationManager::ForcedRoaming |
             QNetworkConfigurationManager::DataStatistics |
-           QNetworkConfigurationManager::CanStartAndStopInterfaces;
+            QNetworkConfigurationManager::CanStartAndStopInterfaces |
+            QNetworkConfigurationManager::NetworkSessionRequired;
 }
 
 QNetworkSessionPrivate *QConnmanEngine::createSessionBackend()
@@ -412,14 +413,14 @@ QNetworkConfiguration::StateFlags QConnmanEngine::getStateForService(const QStri
     QConnmanServiceInterface serv(service);
     QNetworkConfiguration::StateFlags flag = QNetworkConfiguration::Defined;
     if( serv.getType() == "cellular") {
-        if(serv.isSetupRequired()) {
-            flag = ( flag | QNetworkConfiguration::Defined);
-        } else {
+        if(!serv.isSetupRequired() && serv.isAutoConnect()) {
             flag = ( flag | QNetworkConfiguration::Discovered);
         }
     } else {
         if(serv.isFavorite()) {
-            flag = ( flag | QNetworkConfiguration::Discovered);
+            if(serv.isAutoConnect()) {
+                flag = ( flag | QNetworkConfiguration::Discovered);
+            }
         } else {
             flag = QNetworkConfiguration::Undefined;
         }
