@@ -571,11 +571,7 @@ void QConnmanEngine::addServiceConfiguration(const QString &servicePath)
 
         QNetworkConfigurationPrivatePointer ptr(cpPriv);
         accessPointConfigurations.insert(ptr->id, ptr);
-        if (connectionType == "wifi")
-            foundConfigurations.prepend(cpPriv);
-        else
-            foundConfigurations.append(cpPriv);
-
+        foundConfigurations.append(cpPriv);
         configInterfaces[cpPriv->id] = serv->getInterface();
 
         locker.unlock();
