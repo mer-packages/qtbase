@@ -208,7 +208,7 @@ QFontEngine *QFontPrivate::engineForScript(int script) const
     QMutexLocker locker(qt_fontdatabase_mutex());
     if (script <= QChar::Script_Latin)
         script = QChar::Script_Common;
-    if (engineData && engineData->fontCache != QFontCache::instance()) {
+    if (engineData && engineData->fontCacheId != QFontCache::instance()->id()) {
         // throw out engineData that came from a different thread
         if (!engineData->ref.deref())
             delete engineData;
@@ -317,7 +317,7 @@ void QFontPrivate::resolve(uint mask, const QFontPrivate *other)
 
 
 QFontEngineData::QFontEngineData()
-    : ref(0), fontCache(QFontCache::instance())
+    : ref(0), fontCacheId(QFontCache::instance()->id())
 {
     memset(engines, 0, QChar::ScriptCount * sizeof(QFontEngine *));
 }
@@ -2628,12 +2628,22 @@ void QFontCache::cleanup()
     if (cache && cache->hasLocalData())
         cache->setLocalData(0);
 }
+
+QMutex QFontCache::m_lock;
+quint64 QFontCache::m_nextId = 1;
 #endif // QT_NO_THREAD
 
 QFontCache::QFontCache()
     : QObject(), total_cost(0), max_cost(min_cost),
       current_timestamp(0), fast(false), timer_id(-1)
 {
+#ifndef QT_NO_THREAD
+    m_lock.lock();
+    m_id = m_nextId++;
+    m_lock.unlock();
+#else
+    m_id = 1;
+#endif
 }
 
 QFontCache::~QFontCache()
