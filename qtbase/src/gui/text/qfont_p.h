@@ -59,6 +59,7 @@
 #include "QtCore/qstringlist.h"
 #include <QtGui/qfontdatabase.h>
 #include "private/qfixed_p.h"
+#include "QtCore/qmutex.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -140,7 +141,7 @@ public:
     ~QFontEngineData();
 
     QAtomicInt ref;
-    QFontCache *fontCache;
+    quint64 fontCacheId;
 
     QFontEngine *engines[QChar::ScriptCount];
 
@@ -206,6 +207,8 @@ public:
     QFontCache();
     ~QFontCache();
 
+    quint64 id() const { return m_id; }
+
     void clear();
 
     struct Key {
@@ -263,6 +266,12 @@ private:
     uint current_timestamp;
     bool fast;
     int timer_id;
+
+#ifndef QT_NO_THREAD
+    static QMutex m_lock;
+    static quint64 m_nextId;
+#endif
+    quint64 m_id;
 };
 
 Q_GUI_EXPORT int qt_defaultDpiX();

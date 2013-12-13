@@ -142,12 +142,21 @@ class QtFreetypeData
 {
 public:
     QtFreetypeData()
-        : library(0)
-    { }
+        : library(0) { }
+    ~QtFreetypeData();
 
     FT_Library library;
     QHash<QFontEngine::FaceId, QFreetypeFace *> faces;
 };
+
+QtFreetypeData::~QtFreetypeData()
+{
+    for (QHash<QFontEngine::FaceId, QFreetypeFace *>::ConstIterator iter = faces.begin(); iter != faces.end(); ++iter)
+        iter.value()->cleanup();
+    faces.clear();
+    FT_Done_FreeType(library);
+    library = 0;
+}
 
 #ifdef QT_NO_THREAD
 Q_GLOBAL_STATIC(QtFreetypeData, theFreetypeData)
@@ -157,6 +166,7 @@ QtFreetypeData *qt_getFreetypeData()
     return theFreetypeData();
 }
 #else
+
 Q_GLOBAL_STATIC(QThreadStorage<QtFreetypeData *>, theFreetypeData)
 
 QtFreetypeData *qt_getFreetypeData()
@@ -315,22 +325,32 @@ QFreetypeFace *QFreetypeFace::getFace(const QFontEngine::FaceId &face_id,
     return freetype;
 }
 
-void QFreetypeFace::release(const QFontEngine::FaceId &face_id)
+void QFreetypeFace::cleanup()
 {
-    QtFreetypeData *freetypeData = qt_getFreetypeData();
-    if (!ref.deref()) {
-        qHBFreeFace((HB_Face)hbFace);
-        FT_Done_Face(face);
-        if(freetypeData->faces.contains(face_id))
-            freetypeData->faces.take(face_id);
-        delete this;
-    }
-    if (freetypeData->faces.isEmpty()) {
-        FT_Done_FreeType(freetypeData->library);
-        freetypeData->library = 0;
-    }
+    qHBFreeFace((HB_Face)hbFace);
+    FT_Done_Face(face);
+    hbFace = 0;
+    face = 0;
 }
 
+void QFreetypeFace::release(const QFontEngine::FaceId &face_id)
+{
+    if (!ref.deref()) {
+        if (face) {
+            QtFreetypeData *freetypeData = qt_getFreetypeData();
+
+            cleanup();
+            if(freetypeData->faces.contains(face_id))
+                freetypeData->faces.take(face_id);
+
+            if (freetypeData->faces.isEmpty()) {
+                FT_Done_FreeType(freetypeData->library);
+                freetypeData->library = 0;
+            }
+        }
+        delete this;
+    }
+}
 
 void QFreetypeFace::computeSize(const QFontDef &fontDef, int *xsize, int *ysize, bool *outline_drawing)
 {
