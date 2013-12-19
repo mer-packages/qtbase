@@ -83,7 +83,6 @@
 #define CONNMAN_MANAGER_PATH		"/"
 
 #define CONNMAN_TASK_INTERFACE		CONNMAN_SERVICE ".Task"
-#define CONNMAN_PROFILE_INTERFACE	CONNMAN_SERVICE ".Profile"
 #define CONNMAN_SERVICE_INTERFACE	CONNMAN_SERVICE ".Service"
 #define CONNMAN_PROVIDER_INTERFACE	CONNMAN_SERVICE ".Provider"
 #define CONNMAN_TECHNOLOGY_INTERFACE	CONNMAN_SERVICE ".Technology"
@@ -121,8 +120,7 @@ public:
 
     QVariantMap getProperties();
     bool setProperty(const QString &name, const QDBusVariant &value);
-    QDBusObjectPath createProfile(const QString &name);
-    bool removeProfile(QDBusObjectPath path);
+
     bool requestScan(const QString &type);
     bool enableTechnology(const QString &type);
     bool disableTechnology(const QString &type);
@@ -137,13 +135,8 @@ public:
 
       // properties
     QString getState();
-    QStringList getAvailableTechnologies();
-    QStringList getEnabledTechnologies();
-    QStringList getConnectedTechnologies();
-    QString getDefaultTechnology();
+
     bool getOfflineMode();
-    QString getActiveProfile();
-    QStringList getProfiles();
     QStringList  getTechnologies();
     QStringList getServices();
     QDBusObjectPath lookupService(const QString &);
@@ -165,33 +158,6 @@ protected:
 private slots:
     void onServicesChanged(const ConnmanMapList&, const QList<QDBusObjectPath> &);
 
-};
-
-class QConnmanProfileInterfacePrivate;
-class QConnmanProfileInterface : public QDBusAbstractInterface
-{
-    Q_OBJECT
-
-public:
-
-    explicit QConnmanProfileInterface(const QString &dbusPathName,QObject *parent = 0);
-    ~QConnmanProfileInterface();
-
-    QVariantMap getProperties();
-// properties
-    QString getName();
-    bool isOfflineMode();
-    QStringList getServices();
-
-Q_SIGNALS:
-    void propertyChanged(const QString &, const QDBusVariant &value);
-private:
-    QConnmanProfileInterfacePrivate *d;
-
-protected:
-    void connectNotify(const QMetaMethod &signal);
-    void disconnectNotify(const QMetaMethod &signal);
-    QVariant getProperty(const QString &);
 };
 
 class QConnmanServiceInterface : public QDBusAbstractInterface

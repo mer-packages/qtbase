@@ -187,16 +187,6 @@ bool QConnmanManagerInterface::setProperty(const QString &name, const QDBusVaria
     return false;
 }
 
-QDBusObjectPath QConnmanManagerInterface::createProfile(const QString &/*name*/)
-{
-    return QDBusObjectPath();
-}
-
-bool QConnmanManagerInterface::removeProfile(QDBusObjectPath /*path*/)
-{
-    return false;
-}
-
 bool QConnmanManagerInterface::requestScan(const QString &type)
 {
     QDBusReply<QString> reply =  this->call(QLatin1String("RequestScan"), QVariant::fromValue(type));
@@ -290,46 +280,10 @@ QDBusObjectPath QConnmanManagerInterface::lookupService(const QString &service)
 
 // properties
 
-QStringList QConnmanManagerInterface::getAvailableTechnologies()
-{
-    QVariant var = getProperty("AvailableTechnologies");
-    return qdbus_cast<QStringList>(var);
-}
-
-QStringList QConnmanManagerInterface::getEnabledTechnologies()
-{
-    QVariant var = getProperty("EnabledTechnologies");
-    return qdbus_cast<QStringList>(var);
-}
-
-QStringList QConnmanManagerInterface::getConnectedTechnologies()
-{
-    QVariant var = getProperty("ConnectedTechnologies");
-    return qdbus_cast<QStringList>(var);
-}
-
-QString QConnmanManagerInterface::getDefaultTechnology()
-{
-    QVariant var = getProperty("DefaultTechnology");
-    return qdbus_cast<QString>(var);
-}
-
 bool QConnmanManagerInterface::getOfflineMode()
 {
     QVariant var = getProperty("OfflineMode");
     return qdbus_cast<bool>(var);
-}
-
-QString QConnmanManagerInterface::getActiveProfile()
-{
-    QVariant var = getProperty("ActiveProfile");
-    return qdbus_cast<QString>(var);
-}
-
-QStringList QConnmanManagerInterface::getProfiles()
-{
-    QVariant var = getProperty("Profiles");
-    return qdbus_cast<QStringList>(var);
 }
 
 QStringList QConnmanManagerInterface::getTechnologies()
@@ -376,77 +330,6 @@ QString QConnmanManagerInterface::getPathForTechnology(const QString &name)
     }
     return "";
 }
-
-
-//////////////////////////
-QConnmanProfileInterface::QConnmanProfileInterface(const QString &dbusPathName,QObject *parent)
-    : QDBusAbstractInterface(QLatin1String(CONNMAN_SERVICE),
-                             dbusPathName,
-                             CONNMAN_PROFILE_INTERFACE,
-                             QDBusConnection::systemBus(), parent)
-{
-}
-
-QConnmanProfileInterface::~QConnmanProfileInterface()
-{
-}
-
-void QConnmanProfileInterface::connectNotify(const QMetaMethod &signal)
-{
-    static const QMetaMethod propertyChangedSignal = QMetaMethod::fromSignal(&QConnmanProfileInterface::propertyChanged);
-    if (signal == propertyChangedSignal) {
-        dbusConnection.connect(QLatin1String(CONNMAN_SERVICE),
-                               this->path(),
-                               QLatin1String(CONNMAN_PROFILE_INTERFACE),
-                               QLatin1String("PropertyChanged"),
-                               this,SIGNAL(propertyChanged(QString,QDBusVariant)));
-    }
-}
-
-void QConnmanProfileInterface::disconnectNotify(const QMetaMethod &signal)
-{
-    static const QMetaMethod propertyChangedSignal = QMetaMethod::fromSignal(&QConnmanProfileInterface::propertyChanged);
-    if (signal == propertyChangedSignal) {
-
-    }
-}
-
-QVariantMap QConnmanProfileInterface::getProperties()
-{
-    QDBusReply<QVariantMap > reply =  this->call(QLatin1String("GetProperties"));
-    return reply.value();
-}
-
-QVariant QConnmanProfileInterface::getProperty(const QString &property)
-{
-    QVariant var;
-    QVariantMap map = getProperties();
-    if (map.contains(property)) {
-        var = map.value(property);
-    }
-    return var;
-}
-
-// properties
-QString QConnmanProfileInterface::getName()
-{
-
-    QVariant var = getProperty("Name");
-    return qdbus_cast<QString>(var);
-}
-
-bool QConnmanProfileInterface::isOfflineMode()
-{
-    QVariant var = getProperty("OfflineMode");
-    return qdbus_cast<bool>(var);
-}
-
-QStringList QConnmanProfileInterface::getServices()
-{
-    QVariant var = getProperty("Services");
-    return qdbus_cast<QStringList>(var);
-}
-
 
 ///////////////////////////
 QConnmanServiceInterface::QConnmanServiceInterface(const QString &dbusPathName,QObject *parent)
