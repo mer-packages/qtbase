@@ -1091,6 +1091,9 @@ void QDBusConnectionPrivate::closeConnection()
                 ;
         }
     }
+
+    qDeleteAll(pendingCalls);
+
     qDBusDebug() << this << "Disconnected";
 }
 
@@ -1832,6 +1835,8 @@ void QDBusConnectionPrivate::processFinishedCall(QDBusPendingCallPrivate *call)
 
     QMutexLocker locker(&call->mutex);
 
+    connection->pendingCalls.removeOne(call);
+
     QDBusMessage &msg = call->replyMessage;
     if (call->pending) {
         // decode the message
@@ -2091,6 +2096,10 @@ QDBusPendingCallPrivate *QDBusConnectionPrivate::sendWithReplyAsync(const QDBusM
 
             pcall->pending = pending;
             q_dbus_pending_call_set_notify(pending, qDBusResultReceived, pcall, 0);
+
+            // DBus won't notify us when a peer disconnects so we need to track these ourselves
+            if (mode == QDBusConnectionPrivate::PeerMode)
+                pendingCalls.append(pcall);
 
             return pcall;
         } else {

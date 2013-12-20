@@ -170,6 +170,7 @@ public:
     typedef QMultiHash<QString, SignalHook> SignalHookHash;
     typedef QHash<QString, QDBusMetaObject* > MetaObjectHash;
     typedef QHash<QByteArray, int> MatchRefCountHash;
+    typedef QList<QDBusPendingCallPrivate*> PendingCallList;
 
     struct WatchedServiceData {
         WatchedServiceData() : refcount(0) {}
@@ -308,6 +309,7 @@ public:
     MatchRefCountHash matchRefCounts;
     ObjectTreeNode rootNode;
     MetaObjectHash cachedMetaObjects;
+    PendingCallList pendingCalls;
 
     QMutex callDeliveryMutex;
     QDBusCallDeliveryEvent *callDeliveryState; // protected by the callDeliveryMutex mutex
