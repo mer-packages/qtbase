@@ -55,7 +55,8 @@
 
 #include "../qbearerengine_impl.h"
 
-#include "qconnmanservice_linux_p.h"
+#include <connman-qt5/networkmanager.h>
+#include <qofono-qt5/qofonomanager.h>
 
 #include <QMap>
 #include <QVariant>
@@ -102,13 +103,22 @@ public:
 private Q_SLOTS:
 
     void doRequestUpdate();
-    void servicePropertyChangedContext(const QString &,const QString &,const QDBusVariant &);
-    void propertyChangedContext(const QString &,const QString &,const QDBusVariant &);
-    void technologyPropertyChangedContext(const QString &,const QString &, const QDBusVariant &);
-    void updateServices(const ConnmanMapList &changed, const QList<QDBusObjectPath> &removed);
+    void technologyConnectedChanged(bool connected);
 
+    void removeConfiguration(const QString &servicePath);
+    void addServiceConfiguration(const QString &servicePath);
+    void servicesListChanged(const QStringList &list);
+    void serviceStateChanged(const QString &state);
+    void serviceAdded(const QString &servicePath);
+    void serviceRemoved(const QString &servicePath);
+    void scanFinished();
+    void connmanAvailabilityChanged(bool b);
 private:
-    QConnmanManagerInterface *connmanManager;
+    NetworkManager *netman;
+
+    QVector<NetworkService*>  m_services;
+    NetworkService *serviceLookup(const QString &path);
+    bool connmanIsAvailable;
 
     QList<QNetworkConfigurationPrivate *> foundConfigurations;
 
@@ -118,18 +128,16 @@ private:
     QNetworkConfiguration::StateFlags getStateForService(const QString &service);
     QNetworkConfiguration::BearerType typeToBearer(const QString &type);
 
-    void removeConfiguration(const QString &servicePath);
-    void addServiceConfiguration(const QString &servicePath);
     QDateTime activeTime;
-
-
-    QMap<QString,QConnmanTechnologyInterface *> technologies; // techpath, tech interface
     QMap<QString,QString> configInterfaces; // id, interface name
     QList<QString> serviceNetworks; //servpath
 
     QNetworkConfiguration::BearerType ofonoTechToBearerType(const QString &type);
     bool isRoamingAllowed(const QString &context);
     bool isAlwaysAskRoaming();
+    QString currentModemPath();
+    QOfonoManager ofonoManager;
+
 protected:
     bool requiresPolling() const;
 };

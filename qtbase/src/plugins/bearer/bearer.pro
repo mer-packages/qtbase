@@ -1,8 +1,12 @@
 TEMPLATE = subdirs
 
 linux*:qtHaveModule(dbus) {
-    SUBDIRS += generic
-    SUBDIRS += connman networkmanager
+    contains(CONFIG,sailfish) {
+        SUBDIRS += sailfish
+    } else {
+        SUBDIRS += generic
+        SUBDIRS += connman networkmanager
+    }
 }
 
 #win32:SUBDIRS += nla
