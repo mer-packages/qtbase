@@ -9,14 +9,14 @@ QT = core core-private network-private dbus core-private
 HEADERS += qconnmanservice_linux_p.h \
            qofonoservice_linux_p.h \
            qconnmanengine.h \
-           ../qnetworksession_impl.h \
+           qnetworksession_impl.h \
            ../qbearerengine_impl.h
 
 SOURCES += main.cpp \
            qconnmanservice_linux.cpp \
            qofonoservice_linux.cpp \
            qconnmanengine.cpp \
-           ../qnetworksession_impl.cpp
+           qnetworksession_impl.cpp
 
 OTHER_FILES += connman.json
 

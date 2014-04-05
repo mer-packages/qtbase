@@ -41,7 +41,7 @@
 
 #include "qconnmanengine.h"
 #include "qconnmanservice_linux_p.h"
-#include "../qnetworksession_impl.h"
+#include "qnetworksession_impl.h"
 
 #include <QtNetwork/private/qnetworkconfiguration_p.h>
 
@@ -67,7 +67,9 @@ QConnmanEngine::QConnmanEngine(QObject *parent)
     connmanManager(new QConnmanManagerInterface(this)),
     ofonoManager(new QOfonoManagerInterface(this)),
     ofonoNetwork(0),
-    ofonoContextManager(0)
+    ofonoContextManager(0),
+    connSelectorInterface(0),
+    connectionDialogOpened(false)
 {
     qDBusRegisterMetaType<ConnmanMap>();
     qDBusRegisterMetaType<ConnmanMapList>();
@@ -77,6 +79,7 @@ QConnmanEngine::QConnmanEngine(QObject *parent)
 QConnmanEngine::~QConnmanEngine()
 {
     qt_safe_close(inotifyFileDescriptor);
+    delete connSelectorInterface;
 }
 
 bool QConnmanEngine::connmanAvailable() const
@@ -99,6 +102,24 @@ void QConnmanEngine::initialize()
 
     connect(connmanManager,SIGNAL(servicesReady(QStringList)),this,SLOT(servicesReady(QStringList)));
     connect(connmanManager,SIGNAL(scanFinished()),this,SLOT(finishedScan()));
+
+    /* We create a default configuration which is a pseudo config */
+    QNetworkConfigurationPrivate *cpPriv = new QNetworkConfigurationPrivate();
+    cpPriv->name = "UserChoice";
+    cpPriv->state = QNetworkConfiguration::Discovered;
+    cpPriv->isValid = true;
+    cpPriv->id = QStringLiteral("Any");
+    cpPriv->type = QNetworkConfiguration::UserChoice;
+    cpPriv->purpose = QNetworkConfiguration::ServiceSpecificPurpose;
+    cpPriv->roamingSupported = false;
+
+    QNetworkConfigurationPrivatePointer ptr(cpPriv);
+    userChoiceConfigurations.insert(cpPriv->id, ptr);
+    foundConfigurations.append(cpPriv);
+
+    locker.unlock();
+    Q_EMIT configurationAdded(ptr);
+    locker.relock();
 
     foreach (const QString &servPath, connmanManager->getServices()) {
         addServiceConfiguration(servPath);
@@ -171,12 +192,18 @@ QString QConnmanEngine::getInterfaceFromId(const QString &id)
 bool QConnmanEngine::hasIdentifier(const QString &id)
 {
     QMutexLocker locker(&mutex);
-    return accessPointConfigurations.contains(id);
+    return accessPointConfigurations.contains(id) ||
+            userChoiceConfigurations.contains(id);
 }
 
 void QConnmanEngine::connectToId(const QString &id)
 {
     QMutexLocker locker(&mutex);
+
+    if (id == QStringLiteral("Any")) {
+        openConnectionDialog(QString());
+        return;
+    }
 
     QConnmanServiceInterface *serv = connmanServiceInterfaces.value(id);
 
@@ -190,7 +217,7 @@ void QConnmanEngine::connectToId(const QString &id)
                     return;
                 }
                 if (isAlwaysAskRoaming()) {
-                    emit connectionError(id, QBearerEngineImpl::OperationNotSupported);
+                    Q_EMIT openDialog(QStringLiteral("cellular"));
                     return;
                 }
             }
@@ -249,6 +276,18 @@ void QConnmanEngine::updateServices(const ConnmanMapList &changed, const QList<Q
 QNetworkSession::State QConnmanEngine::sessionStateForId(const QString &id)
 {
     QMutexLocker locker(&mutex);
+
+    if (id == QStringLiteral("Any")) {
+        QNetworkConfigurationPrivatePointer userPtr = userChoiceConfigurations.value(QStringLiteral("Any"));
+
+        if ((userPtr->state & QNetworkConfiguration::Active) == QNetworkConfiguration::Active) {
+            return QNetworkSession::Connected;
+        }
+
+        if ((userPtr->state & QNetworkConfiguration::Discovered) == QNetworkConfiguration::Discovered) {
+            return QNetworkSession::Disconnected;
+        }
+    }
 
     QNetworkConfigurationPrivatePointer ptr = accessPointConfigurations.value(id);
 
@@ -335,19 +374,13 @@ QNetworkConfigurationManager::Capabilities QConnmanEngine::capabilities() const
 
 QNetworkSessionPrivate *QConnmanEngine::createSessionBackend()
 {
-     return new QNetworkSessionPrivateImpl;
+    return new QNetworkSessionPrivateImpl;
 }
 
 QNetworkConfigurationPrivatePointer QConnmanEngine::defaultConfiguration()
 {
     const QMutexLocker locker(&mutex);
-    Q_FOREACH (const QString &servPath, connmanManager->getServices()) {
-        if (connmanServiceInterfaces.contains(servPath)) {
-            if (accessPointConfigurations.contains(servPath))
-                return accessPointConfigurations.value(servPath);
-        }
-    }
-    return QNetworkConfigurationPrivatePointer();
+    return userChoiceConfigurations.value(QStringLiteral("Any"));
 }
 
 void QConnmanEngine::serviceStateChanged(const QString &state)
@@ -388,6 +421,47 @@ void QConnmanEngine::configurationChange(QConnmanServiceInterface *serv)
 
         ptr->mutex.unlock();
 
+        QNetworkConfigurationPrivatePointer userPtr = userChoiceConfigurations.value(QStringLiteral("Any"));
+
+        bool userChanged = false;
+
+        userPtr->mutex.lock();
+
+        if (userPtr->name == networkName && userPtr->state != ptr->state) {
+            userPtr->name = "UserChoice";
+            userPtr->state = QNetworkConfiguration::Discovered;
+            userPtr->type = QNetworkConfiguration::UserChoice;
+            userPtr->roamingSupported = false;
+            userChanged = true;
+
+        } else if (userPtr->name != networkName && serv->state() == QStringLiteral("online")) {
+
+            if (!userPtr->isValid) {
+                userPtr->isValid = true;
+            }
+
+            if (userPtr->name != networkName) {
+                userPtr->name = networkName;
+                userChanged = true;
+            }
+
+            if (userPtr->state != curState) {
+                userPtr->state = curState;
+                userChanged = true;
+            }
+
+            userPtr->roamingSupported = ptr->roamingSupported;
+            userPtr->type = ptr->type;
+        }
+        userPtr->mutex.unlock();
+
+        if (userChanged) {
+            locker.unlock();
+            Q_EMIT configurationChanged(userPtr);
+            locker.relock();
+        }
+
+
         if (changed) {
             locker.unlock();
             emit configurationChanged(ptr);
@@ -410,8 +484,7 @@ QNetworkConfiguration::StateFlags QConnmanEngine::getStateForService(const QStri
     if (serv->type() == QLatin1String("cellular")) {
 
         if (!serv->autoConnect()
-                || (serv->roaming()
-                    && (isAlwaysAskRoaming() || !isRoamingAllowed(serv->path())))) {
+                || (serv->roaming() && !isRoamingAllowed(serv->path()))) {
             flag = (flag | QNetworkConfiguration::Defined);
         } else {
             flag = (flag | QNetworkConfiguration::Discovered);
@@ -556,6 +629,24 @@ void QConnmanEngine::addServiceConfiguration(const QString &servicePath)
         locker.unlock();
         Q_EMIT configurationAdded(ptr);
         locker.relock();
+
+        QNetworkConfigurationPrivatePointer userPtr = userChoiceConfigurations.value(QStringLiteral("Any"));
+        // update the user configuration if this one is online
+
+        if ((cpPriv->state & QNetworkConfiguration::Active) == QNetworkConfiguration::Active
+                && (userPtr->state & QNetworkConfiguration::Active) != QNetworkConfiguration::Active) {
+
+            userPtr->mutex.lock();
+            userPtr->name = networkName;
+            userPtr->id = cpPriv->id;
+            userPtr->state = cpPriv->state;
+            userPtr->roamingSupported = cpPriv->roamingSupported;
+            userPtr->mutex.unlock();
+
+            locker.unlock();
+            Q_EMIT configurationChanged(userPtr);
+            locker.relock();
+        }
     }
 }
 
@@ -590,6 +681,47 @@ void QConnmanEngine::inotifyActivated()
             QTimer::singleShot(1000, this, SLOT(reEvaluateCellular())); //give this time to finish write
         }
     }
+}
+
+
+void QConnmanEngine::openConnectionDialog(const QString &type)
+{
+    if (connectionDialogOpened)
+        return;
+    // open Connection Selector
+    if (!connSelectorInterface) {
+        connSelectorInterface = new QDBusInterface(QStringLiteral("com.jolla.lipstick.ConnectionSelector"),
+                                                   QStringLiteral("/"),
+                                                   QStringLiteral("com.jolla.lipstick.ConnectionSelectorIf"),
+                                                   QDBusConnection::sessionBus(),
+                                                   0);
+    }
+    connSelectorInterface->connection().connect(QStringLiteral("com.jolla.lipstick.ConnectionSelector"),
+                                                QStringLiteral("/"),
+                                                QStringLiteral("com.jolla.lipstick.ConnectionSelectorIf"),
+                                                QStringLiteral("connectionSelectorClosed"),
+                                                this,
+                                                SLOT(connectionDialogClosed(bool)));
+    QList<QVariant> args;
+    args.append(type);
+    connSelectorInterface->callWithArgumentList(QDBus::NoBlock,
+                                                QStringLiteral("openConnection"), args);
+    connectionDialogOpened = true;
+}
+
+void QConnmanEngine::connectionDialogClosed(bool b)
+{
+    connSelectorInterface->connection().disconnect(QStringLiteral("com.jolla.lipstick.ConnectionSelector"),
+                                                   QStringLiteral("/"),
+                                                   QStringLiteral("com.jolla.lipstick.ConnectionSelectorIf"),
+                                                   QStringLiteral("connectionSelectorClosed"),
+                                                   this,
+                                                   SLOT(connectionDialogClosed(bool)));
+
+    if (!b && connectionDialogOpened) {
+        Q_EMIT dialogClosed(b);
+    }
+    connectionDialogOpened = false;
 }
 
 QT_END_NAMESPACE

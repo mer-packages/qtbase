@@ -97,6 +97,12 @@ public:
 
     QList<QNetworkConfigurationPrivate *> getConfigurations();
 
+    void openConnectionDialog(const QString &type);
+
+Q_SIGNALS:
+    void openDialog(const QString &type);
+    void dialogClosed(bool);
+
 private Q_SLOTS:
 
     void doRequestUpdate();
@@ -109,6 +115,9 @@ private Q_SLOTS:
     void configurationChange(QConnmanServiceInterface * service);
     void reEvaluateCellular();
     void inotifyActivated();
+
+    void connectionDialogClosed(bool b);
+
 private:
     QConnmanManagerInterface *connmanManager;
 
@@ -139,9 +148,12 @@ private:
 
     int inotifyWatcher;
     int inotifyFileDescriptor;
+    QDBusInterface *connSelectorInterface;
+    bool connectionDialogOpened;
 
 protected:
     bool requiresPolling() const;
+
 };
 
 
