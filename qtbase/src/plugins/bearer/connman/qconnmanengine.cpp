@@ -104,7 +104,7 @@ void QConnmanEngine::initialize()
         addServiceConfiguration(servPath);
     }
     Q_EMIT updateCompleted();
-    QSettings confFile(QStringLiteral("nemomobile"),QStringLiteral("connectionagent"));
+    QSettings confFile(QLatin1String("nemomobile"), QLatin1String("connectionagent"));
 
     inotifyFileDescriptor = ::inotify_init();
     inotifyWatcher = ::inotify_add_watch(inotifyFileDescriptor, QFile::encodeName(confFile.fileName()), IN_MODIFY);
@@ -572,9 +572,9 @@ bool QConnmanEngine::requiresPolling() const
 
 bool QConnmanEngine::isAlwaysAskRoaming()
 {
-    QSettings confFile(QStringLiteral("nemomobile"),QStringLiteral("connectionagent"));
-    confFile.beginGroup(QStringLiteral("Connectionagent"));
-    return confFile.value(QStringLiteral("askForRoaming")).toBool();
+    QSettings confFile(QLatin1String("nemomobile"), QLatin1String("connectionagent"));
+    confFile.beginGroup(QLatin1String("Connectionagent"));
+    return confFile.value(QLatin1String("askForRoaming")).toBool();
 }
 
 void QConnmanEngine::reEvaluateCellular()
